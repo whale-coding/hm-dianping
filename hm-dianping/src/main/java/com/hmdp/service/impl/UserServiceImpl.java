@@ -44,6 +44,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String code = RandomUtil.randomNumbers(6);  // 使用hutool工具包的工具生成6位数字验证码
         // 4、保存验证码到session中
         session.setAttribute(Constants.PHONE_KEY, code);
+        // 保存手机号到session中！！！目的是解决【当获取验证码的手机号和登录手机号不一致时，也可以登录成功】的bug
+        session.setAttribute(Constants.CACHE_PHONE_KEY, phone); // 保存手机号
 
         // 5、发送短信验证码
         // TODO:这里并没有去真正实现，可以自己去使用阿里云的短信服务实现发送验证码功能！！！
@@ -55,7 +57,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 
     // 登录
     // TODO:该接口还存在着一个bug:使用A手机号发送验证码，B手机号登录，会发现也能登录成功！！
-    // TODO：这个问题暂时没有解决，应该需要再次校验手机号，保证发验证码的手机号与登录的手机号是一致的。
+    // TODO：已经解决了：解决办法是在发送验证码的时候同时将手机号存储到session中，在登录时验证发送验证码的手机号和登录的手机号是否相同。
     @Override
     public Result login(LoginFormDTO loginForm, HttpSession session) {
         // 1、校验手机号
@@ -66,7 +68,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
         // 2、校验验证码
         Object cacheCode = session.getAttribute(Constants.PHONE_KEY);  // 从session获取的code
-        String code = loginForm.getCode();  // 用户传递过来的code
+        // 获取保存在session中的手机号
+        Object cachePhone = session.getAttribute(Constants.CACHE_PHONE_KEY);
+        // 用户传递过来的手机验证码code
+        String code = loginForm.getCode();
+
+        // 对登录的手机号进行校验，确保与发送验证码的手机号是一致的！！
+        if (cachePhone == null || !cachePhone.toString().equals(phone)) {
+            return Result.fail("手机号不匹配或未发送验证码！");
+        }
+
+        // 对验证码进行校验
         if (cacheCode == null || ! cacheCode.toString().equals(code)){
             // 验证码不一致
             return Result.fail("验证码错误!");

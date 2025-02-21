@@ -11,4 +11,8 @@ public class Constants {
     public static final String PHONE_KEY = "code";
     // 用户信息存入session时的key
     public static final String SESSION_USER_KEY = "user";
+
+    // 存储发送验证码时的手机号的key
+    public static final String CACHE_PHONE_KEY = "cachePhone";
+
 }
