@@ -15,4 +15,7 @@ public class Constants {
     // 存储发送验证码时的手机号的key
     public static final String CACHE_PHONE_KEY = "cachePhone";
 
+    // 前后端交互时的请求头存储token的key
+    public static final String REQUEST_HEADER_TOKEN_KEY = "authorization";
+
 }

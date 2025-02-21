@@ -1,6 +1,7 @@
 package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -13,10 +14,17 @@ import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.hmdp.utils.RedisConstants.*;
 import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 
 /**
@@ -31,7 +39,8 @@ import static com.hmdp.utils.SystemConstants.USER_NICK_NAME_PREFIX;
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
-    // 发送手机验证码
+    /*
+    // 发送手机验证码(基于session实现验证码登录功能)
     @Override
     public Result sendCode(String phone, HttpSession session) {
         // 1、对用户提交的手机号进行校验
@@ -54,8 +63,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 返回成功信息
         return Result.ok();
     }
+    */
 
-    // 登录
+
+
+    /*
+    // 登录(基于session实现验证码登录功能)
     // TODO:该接口还存在着一个bug:使用A手机号发送验证码，B手机号登录，会发现也能登录成功！！
     // TODO：已经解决了：解决办法是在发送验证码的时候同时将手机号存储到session中，在登录时验证发送验证码的手机号和登录的手机号是否相同。
     @Override
@@ -101,6 +114,86 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         // 基于session去做登录，不需要返回登录凭证,session的原理是基于cookie
         // 每一个session都会有一个唯一的ID，在服务端访问时，session会自动写入cookie当中携带过来
         return Result.ok();
+    }
+    */
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+
+    // 发送手机验证码(基于redis实现验证码登录功能)
+    @Override
+    public Result sendCode(String phone, HttpSession session) {
+        // 1、对用户提交的手机号进行校验
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            // 注意这个isPhoneInvalid()函数是校验手机号是否是非法的手机号，true表示是非法手机号！
+            // 2、如果手机号非法，返回错误信息
+            return Result.fail("手机号格式错误！");
+        }
+        // 3、手机号合法，生成验证码
+        String code = RandomUtil.randomNumbers(6);  // 使用hutool工具包的工具生成6位数字验证码
+        // TODO: 4、保存验证码到redis中  set key value ex 120
+        stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone,code,LOGIN_CODE_TTL, TimeUnit.MINUTES);
+
+        // 5、发送短信验证码
+        // TODO:这里并没有去真正实现，可以自己去使用阿里云的短信服务实现发送验证码功能！！！
+        log.debug("发送短信验证码成功，验证码:{}", code);
+
+        // 返回成功信息
+        return Result.ok();
+    }
+
+    // 登录(基于redis实现验证码登录功能)
+    @Override
+    public Result login(LoginFormDTO loginForm, HttpSession session) {
+        // 1、校验手机号
+        String phone = loginForm.getPhone();
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            // 如果手机号非法，返回错误信息
+            return Result.fail("手机号格式错误！");
+        }
+        // 2、校验验证码
+        // TODO: 从redis中获取验证码并校验
+        String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);  // 从Redis中获取的手机验证码
+        String code = loginForm.getCode();  // 用户传递过来的手机验证码code
+
+        // 对验证码进行校验
+        if (cacheCode == null || ! cacheCode.equals(code)){
+            // 验证码不一致
+            return Result.fail("验证码错误!");
+        }
+
+        // 3、手机号和验证码校验完成，根据手机号查询用户信息 select * from tb_user where phone = ?
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getPhone,phone);
+        User user = getOne(queryWrapper);
+
+        // 4、判断用户是否存在
+        if (user == null) {
+            // 5、用户不存在，创建新用户
+            user = createUserWithPhone(phone);
+        }
+        // 5、用户存在，保存用户信息到redis中
+        // TODO 5.1 随机生成token，作为登录令牌
+        String token = UUID.randomUUID().toString(true);
+        // TODO 5.2 将User对象转为UserDTO对象，再转为HashMap，方便后面使用redis的hash结构
+        UserDTO userDTO = BeanUtil.copyProperties(user,UserDTO.class);  // 将user中的属性拷贝到UserDTO中
+        // 但是这里会报错，因为userDTO中的id类型是Long类型，stringRedisTemplate只能处理String类型的，因此还需要手动去转换为Map
+        // Map<String, Object> userMap = BeanUtil.beanToMap(userDTO);  // 将对象转换为Map
+        // TODO 手动将对象转换为Map
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", userDTO.getId().toString());  // 转换为 String！之后stringRedisTemplate就能处理了
+        userMap.put("nickName", userDTO.getNickName());
+        userMap.put("icon", userDTO.getIcon());
+
+        // TODO 5.3 保存到redis中
+        String tokenKey = LOGIN_USER_KEY + token;  // 为了区分业务，建议在token前面加上前缀作为tokenKey
+        stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);  // 这里建议使用putAll()而不是put()方法，因为put()方法会多次交互，效率低
+        // TODO 5.4 设置token有效期
+        stringRedisTemplate.expire(tokenKey,LOGIN_USER_TTL, TimeUnit.MINUTES);
+
+        // TODO 6 返回token
+        return Result.ok(token);
     }
 
     // 根据手机号创建用户信息
