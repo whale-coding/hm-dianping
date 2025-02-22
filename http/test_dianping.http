@@ -1,0 +1,22 @@
+### GET request to example server
+GET https://examples.http-client.intellij.net/get
+    ?generated-in=IntelliJ IDEA
+
+### 更新商铺信息
+PUT http://localhost:8081/shop
+Content-Type: application/json
+
+{
+  "area": "大关",
+  "openHours": "10:00-22:00",
+  "sold": 4215,
+  "address": "金华路锦昌文华苑29号",
+  "comments": 3035,
+  "avgPrice": 80,
+  "score": 37,
+  "name": "102茶餐厅",
+  "typeId": 1,
+  "id": 1
+}
+
+###
