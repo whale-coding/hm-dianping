@@ -2,12 +2,14 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.RedisData;
 import lombok.val;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 
+import java.time.LocalDateTime;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static com.hmdp.utils.RedisConstants.*;
@@ -78,8 +83,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         // 缓存穿透问题的解决
         // Shop shop = queryWithPassThrough(id);
 
-        // 缓存击穿问题的解决
-        Shop shop = queryWithMutex(id);
+        // 缓存击穿问题的解决:基于互斥锁
+        // Shop shop = queryWithMutex(id);
+
+        // 缓存击穿问题的解决：基于逻辑过期
+        Shop shop = queryWithLogicalExpire(id);
+
         if (shop == null) {
             return Result.fail("店铺不存在");
         }
@@ -177,6 +186,57 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return shop;
     }
 
+    // 缓存击穿解决办法的逻辑封装,基于逻辑过期解决。
+    public Shop queryWithLogicalExpire(Long id){
+        String shop_cache_key = CACHE_SHOP_KEY + id;
+        // 1、从redis中查询商铺缓存
+        String shopJson = stringRedisTemplate.opsForValue().get(shop_cache_key);
+        // 2、判断缓存中是否有商铺信息
+        if (StrUtil.isBlank(shopJson)){
+            // 3、不存在，直接返回null
+            return null;
+        }
+        // TODO: 1、缓存命中，需要先把json反序列化为对象
+        RedisData redisData = JSONUtil.toBean(shopJson,RedisData.class);
+        Shop shop = JSONUtil.toBean((JSONObject) redisData.getData(),Shop.class);
+        LocalDateTime expireTime = redisData.getExpireTime();
+        // TODO: 2、判断逻辑过期时间是否过期
+        if (expireTime.isAfter(LocalDateTime.now())) {
+            // TODO: 2.1、未过期，直接返回店铺信息
+            return shop;
+        }
+        // TODO: 2.2、已过期，需要缓存重建
+        // TODO: 3、缓存重建
+        // TODO: 3.1、获取互斥锁
+        String lockKey = LOCK_SHOP_KEY + id;
+        boolean isLock = tryLock(lockKey);
+        // TODO: 3.2、判断是否获取锁成功
+        if (isLock){
+            // TODO: 4、DoubleCheck，再次检查redis逻辑过期时间是否过期
+            if (expireTime.isAfter(LocalDateTime.now())) {
+                // TODO: 4.1、未过期，直接返回店铺信息
+                return shop;
+            }
+            // TODO: 4、获取锁成功,已过期，需要缓存重建，开启独立线程，实现缓存重建
+            CACHE_REBUILD_EXECUTOR.submit(()->{
+                try {
+                    // 重建缓存
+                    this.saveShopToRedis(id,20L);
+                }catch (Exception e){
+                    throw new RuntimeException(e);
+                }finally {
+                    // 释放锁
+                    unlock(lockKey);
+                }
+            });
+        }
+
+        // 返回商铺信息
+        return shop;
+    }
+
+    // 缓存重建线程池
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
     // 获取锁
     private boolean tryLock(String key){
@@ -187,6 +247,23 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private void unlock(String key){
         stringRedisTemplate.delete(key);
     }
+
+    // 存储店铺信息和逻辑过期时间
+    public void saveShopToRedis(Long id, Long expireSeconds) throws InterruptedException {
+        // 1、查询店铺数据
+        Shop shop = getById(id);
+
+        Thread.sleep(200);  // 模拟缓存重建延迟
+
+        // 2、封装逻辑过期时间
+        RedisData redisData = new RedisData();
+        redisData.setData(shop);
+        redisData.setExpireTime(LocalDateTime.now().plusSeconds(expireSeconds));
+        // 3、写入redis
+        stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY +id,JSONUtil.toJsonStr(redisData));
+
+    }
+    //
 
     // 更新商铺信息
     @Override
