@@ -81,13 +81,15 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         */
 
         // 缓存穿透问题的解决
-        // Shop shop = queryWithPassThrough(id);
+        Shop shop = queryWithPassThrough(id);
+
+        /*缓存击穿问题，一定要先把数据给预热，即提前加入redis中才可以*/
 
         // 缓存击穿问题的解决:基于互斥锁
         // Shop shop = queryWithMutex(id);
 
         // 缓存击穿问题的解决：基于逻辑过期
-        Shop shop = queryWithLogicalExpire(id);
+        // Shop shop = queryWithLogicalExpire(id);
 
         if (shop == null) {
             return Result.fail("店铺不存在");
