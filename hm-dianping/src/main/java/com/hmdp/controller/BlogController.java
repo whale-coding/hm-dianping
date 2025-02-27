@@ -82,4 +82,14 @@ public class BlogController {
     public Result queryBlogById(@PathVariable("id") Long id){
         return blogService.queryBlogById(id);
     }
+
+    /**
+     * 查看博客点赞的TopN的用户集合
+     * @param id 笔记的id
+     * @return 笔记的内容
+     */
+    @GetMapping("/likes/{id}")
+    public Result queryBlogLikes(@PathVariable("id") Long id){
+        return blogService.queryBlogLikes(id);
+    }
 }

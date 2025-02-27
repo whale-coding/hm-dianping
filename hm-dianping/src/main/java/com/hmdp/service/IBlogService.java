@@ -33,4 +33,11 @@ public interface IBlogService extends IService<Blog> {
      * @return 无
      */
     Result likeBlog(Long id);
+
+    /**
+     * 查看博客点赞的TopN的用户集合
+     * @param id 笔记的id
+     * @return 笔记的内容
+     */
+    Result queryBlogLikes(Long id);
 }
