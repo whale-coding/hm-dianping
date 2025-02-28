@@ -40,4 +40,11 @@ public interface IBlogService extends IService<Blog> {
      * @return 笔记的内容
      */
     Result queryBlogLikes(Long id);
+
+    /**
+     * 保存博客
+     * @param blog 要保存的博客
+     * @return 无
+     */
+    Result saveBlog(Blog blog);
 }
