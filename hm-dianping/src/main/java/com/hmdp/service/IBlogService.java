@@ -47,4 +47,12 @@ public interface IBlogService extends IService<Blog> {
      * @return 无
      */
     Result saveBlog(Blog blog);
+
+    /**
+     * 关注推送页面的分页查询
+     * @param max 上一次查询的最小时间，即本次查询的最大时间
+     * @param offset 偏移量，即要跳过的元素的个数
+     * @return 滚动分页结果集合
+     */
+    Result queryBlogOfFollow(Long max, Integer offset);
 }
