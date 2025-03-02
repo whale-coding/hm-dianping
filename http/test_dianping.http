@@ -35,3 +35,7 @@ Content-Type: application/json
   "beginTime": "2025-02-23T18:56:17",
   "endTime": "2025-10-23T18:56:18"
 }
+
+### 用户签到
+POST http://localhost:8081/user/sign
+Authorization: 00447ddef08f4893a72cc2675ff3ac9a  # token
