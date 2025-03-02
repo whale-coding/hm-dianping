@@ -118,4 +118,13 @@ public class UserController {
         return userService.sign();
     }
 
+    /**
+     * 签到统计（统计当前用户截止当前时间在本月的连续签到天数）
+     * @return 连续签到的天数
+     */
+    @GetMapping("/sign/count")
+    private Result signCount(){
+        return userService.signCount();
+    }
+
 }

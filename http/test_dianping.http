@@ -39,3 +39,7 @@ Content-Type: application/json
 ### 用户签到
 POST http://localhost:8081/user/sign
 Authorization: 00447ddef08f4893a72cc2675ff3ac9a  # token
+
+### 签到统计
+GET http://localhost:8081/user/sign/count
+Authorization: 00447ddef08f4893a72cc2675ff3ac9a  # token
