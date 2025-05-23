@@ -8,3 +8,5 @@
 命令：XGROUP CREATE stream.orders g1 0 MKSTREAM
 重新启动项目，就不报错了
 
+2、在项目重启之后报错：com.mysql.jdbc.exceptions.jdbc4.MySQLNonTransientConnectionException: Public Key Retrieval is not allowed
+解决办法：在idea里面把数据库给连接上，如果已经连接了，则刷新。
