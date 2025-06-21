@@ -1,3 +1,4 @@
+# 本地前端项目地址：http://127.0.0.1:8088/
 server:
   port: 8081
 spring:
@@ -25,3 +26,9 @@ mybatis-plus:
 logging:
   level:
     com.hmdp: debug
+
+hmdp:
+  jwt:
+    user-secret-key: ThisIsA32BytesLongSecretKeyForHS256  # 设置jwt签名加密时使用的秘钥
+    user-ttl: 7200000  # 设置jwt过期时间，7天
+    user-token-name: authorization  # 设置前端传递过来的令牌名称

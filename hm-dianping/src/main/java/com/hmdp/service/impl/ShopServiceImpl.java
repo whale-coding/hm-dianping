@@ -5,13 +5,16 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.Shop;
 import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.hmdp.utils.CacheClient;
 import com.hmdp.utils.RedisData;
 import com.hmdp.utils.SystemConstants;
+import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 import org.springframework.data.geo.Distance;
 import org.springframework.data.geo.GeoResult;
@@ -40,11 +43,18 @@ import static com.hmdp.utils.RedisConstants.*;
  * @author 虎哥
  * @since 2021-12-22
  */
+@Slf4j
 @Service
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private CacheClient cacheClient;  // redis缓存工具类
+
+    @Resource
+    private Cache<String,Object> caffeineCache;   // 本地缓存caffeine
 
     // 根据id查询商铺信息
     @Override
@@ -88,8 +98,21 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
         */
 
+        //1.从Caffeine中查询数据
+        Object o = caffeineCache.getIfPresent(CACHE_SHOP_KEY + id);
+        if(Objects.nonNull(o)){
+            log.info("从Caffeine中查询到数据...");
+            return Result.ok( o);
+        }
+
         // 缓存穿透问题的解决
-        Shop shop = queryWithPassThrough(id);
+        // Shop shop = queryWithPassThrough(id);
+        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY,id,Shop.class,this::getById,CACHE_SHOP_TTL,TimeUnit.MINUTES);
+        if(shop != null){
+            log.info("从Redis中查到数据");
+            caffeineCache.put(CACHE_SHOP_KEY+id,shop);
+        }
+
 
         /*缓存击穿问题，一定要先把数据给预热，即提前加入redis中才可以*/
 

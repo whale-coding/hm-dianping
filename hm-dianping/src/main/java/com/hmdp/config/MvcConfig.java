@@ -2,6 +2,7 @@ package com.hmdp.config;
 
 import com.hmdp.interceptor.LoginInterceptor;
 import com.hmdp.interceptor.RefreshTokenInterceptor;
+import com.hmdp.properties.JwtProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -39,6 +40,9 @@ public class MvcConfig implements WebMvcConfigurer {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private JwtProperties jwtProperties;
+
     /*
     // 基于redis登录，添加登录拦截器
     @Override
@@ -62,7 +66,7 @@ public class MvcConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         // token刷新的拦截器
         // 拦截所有请求，且通过order()设置其执行在登录拦截器之前
-        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate)).addPathPatterns("/**").order(0);
+        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate, jwtProperties)).addPathPatterns("/**").order(0);
         // 登录拦截器
         registry.addInterceptor(new LoginInterceptor())  // 注册自定义的登录拦截器
                 .excludePathPatterns(  // 配置拦截规则。excludePathPatterns是配置要放行哪些接口
